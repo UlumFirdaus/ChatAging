@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Cabang, TS, CDM, Hotline dengan Export Excel, Pencarian, Backup, dan History</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        #chatContainer {
+            width: 500px;
+            padding: 20px;
+            background-color: #fff;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        #chatMessages {
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        .message {
+            margin-bottom: 10px;
+            padding: 8px;
+            border-radius: 5px;
+            position: relative; /* Untuk posisi tombol hapus */
+        }
+        .highlight {
+            background-color: yellow;
+        }
+        /* Warna untuk masing-masing user */
+        .Cabang {
+            background-color: #e1f5fe; /* Biru muda */
+        }
+        .TS {
+            background-color: #ffe0b2; /* Kuning muda */
+        }
+        .CDM {
+            background-color: #d1c4e9; /* Ungu muda */
+        }
+        .Hotline {
+            background-color: #c8e6c9; /* Hijau muda */
+        }
+        #newMessage, #searchMessage, #userSelect, #fileInput {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            box-sizing: border-box;
+        }
+        #sendMessage, #exportChat, #uploadBackup {
+            width: 100%;
+            padding: 10px;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            margin-bottom: 10px;
+        }
+        #sendMessage {
+            background-color: #0288d1;
+        }
+        #exportChat {
+            background-color: #4caf50;
+        }
+        #uploadBackup {
+            background-color: #ff9800;
+        }
+        #searchContainer {
+            display: flex;
+            margin-bottom: 10px;
+        }
+        #searchMessage {
+            flex: 1;
+        }
+        #searchButton {
+            padding: 10px;
+            background-color: #ff9800;
+            color: white;
+            border: none;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+        .deleteButton {
+            position: absolute;
+            right: 10px;
+            top: 8px;
+            background: none; /* Tidak ada latar belakang */
+            color: red; /* Warna merah untuk ikon hapus */
+            border: none;
+            cursor: pointer;
+            font-size: 16px; /* Ukuran font untuk ikon */
+        }
+    </style>
+</head>
+<body>
+
+<div id="chatContainer">
+    <!-- Menu pencarian di bagian atas -->
+    <div id="searchContainer">
+        <input type="text" id="searchMessage" placeholder="Cari pesan...">
+        <button id="searchButton">Cari</button>
+    </div>
+
+    <div id="chatMessages"></div>
+    <select id="userSelect">
+        <option value="Cabang">Cabang</option>
+        <option value="TS">TS</option>
+        <option value="CDM">CDM</option>
+        <option value="Hotline">Hotline</option>
+    </select>
+    <input type="text" id="newMessage" placeholder="Ketik pesan di sini...">
+    <button id="sendMessage">Kirim</button>
+
+    <button id="exportChat">Export ke Excel</button>
+
+    <!-- Input untuk upload backup file Excel -->
+    <input type="file" id="fileInput" accept=".xlsx">
+    <button id="uploadBackup">Upload Backup</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.16.9/xlsx.full.min.js"></script>
+<script>
+    const chatMessages = document.getElementById("chatMessages");
+    const newMessageInput = document.getElementById("newMessage");
+    const sendMessageButton = document.getElementById("sendMessage");
+    const userSelect = document.getElementById("userSelect");
+    const exportButton = document.getElementById("exportChat");
+    const searchMessageInput = document.getElementById("searchMessage");
+    const searchButton = document.getElementById("searchButton");
+    const fileInput = document.getElementById("fileInput");
+    const uploadBackupButton = document.getElementById("uploadBackup");
+
+    let chatLog = [];
+
+    // Fungsi untuk menyimpan chatLog ke localStorage
+    function saveChatLogToLocalStorage() {
+        localStorage.setItem("chatLog", JSON.stringify(chatLog));
+    }
+
+    // Fungsi untuk memuat chatLog dari localStorage
+    function loadChatLogFromLocalStorage() {
+        const savedChatLog = localStorage.getItem("chatLog");
+        if (savedChatLog) {
+            chatLog = JSON.parse(savedChatLog);
+            renderChatLog();
+        }
+    }
+
+    // Fungsi untuk menampilkan pesan baru di chat
+    function addMessageToChat(user, message, timestamp) {
+        const messageElement = document.createElement("div");
+        messageElement.classList.add("message", user); // Menambahkan kelas untuk warna sesuai user
+        messageElement.innerHTML = `[${timestamp}] ${user}: ${message}`;
+        
+        // Membuat tombol hapus sebagai ikon "X"
+        const deleteButton = document.createElement("button");
+        deleteButton.innerHTML = "&times;"; // Ikon "X"
+        deleteButton.classList.add("deleteButton");
+        deleteButton.onclick = function() {
+            deleteMessage(timestamp); // Panggil fungsi untuk menghapus pesan
+        };
+
+        messageElement.appendChild(deleteButton); // Tambahkan tombol hapus ke elemen pesan
+        chatMessages.appendChild(messageElement);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    // Fungsi untuk menghapus pesan berdasarkan timestamp
+    function deleteMessage(timestamp) {
+        chatLog = chatLog.filter(log => log.timestamp !== timestamp); // Hapus log dengan timestamp yang cocok
+        saveChatLogToLocalStorage(); // Simpan perubahan ke localStorage
+        renderChatLog(); // Render ulang chat setelah penghapusan
+    }
+
+    // Fungsi untuk menampilkan semua pesan dari chatLog
+    function renderChatLog() {
+        chatMessages.innerHTML = ""; // Bersihkan tampilan chat sebelumnya
+        chatLog.forEach(log => {
+            addMessageToChat(log.user, log.message, log.timestamp);
+        });
+    }
+
+    // Fungsi untuk menangani pengiriman pesan
+    function sendMessage() {
+        const message = newMessageInput.value;
+        const user = userSelect.value;
+        const timestamp = new Date().toLocaleString();
+        if (message.trim() !== "") {
+            addMessageToChat(user, message, timestamp);
+            chatLog.push({ user, message, timestamp }); // Simpan ke log
+            saveChatLogToLocalStorage(); // Simpan ke localStorage setiap kali ada pesan baru
+            newMessageInput.value = ""; // Hapus pesan setelah dikirim
+        }
+    }
+
+    // Event listener untuk tombol kirim
+    sendMessageButton.addEventListener("click", sendMessage);
+
+    // Fungsi untuk mencari pesan di chat
+    function searchMessage() {
+        const searchTerm = searchMessageInput.value.toLowerCase();
+        const messages = document.querySelectorAll(".message");
+
+        // Hilangkan highlight dari semua pesan sebelumnya
+        messages.forEach(message => {
+            message.classList.remove("highlight");
+        });
+
+        // Cek jika ada pesan yang cocok dengan kata pencarian
+        messages.forEach(message => {
+            if (message.innerText.toLowerCase().includes(searchTerm)) {
+                message.classList.add("highlight"); // Beri highlight pada pesan yang sesuai
+            }
+        });
+    }
+
+    // Event listener untuk tombol pencarian
+    searchButton.addEventListener("click", searchMessage);
+
+    // Fungsi untuk ekspor chat ke file Excel
+    function exportChatToExcel() {
+        const ws_data = [["User", "Pesan", "Timestamp"]]; // Header Excel
+        chatLog.forEach(log => {
+            ws_data.push([log.user, log.message, log.timestamp]);
+        });
+        const ws = XLSX.utils.aoa_to_sheet(ws_data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "ChatLog");
+        XLSX.writeFile(wb, "chat_log.xlsx");
+    }
+
+    // Event listener untuk tombol ekspor
+    exportButton.addEventListener("click", exportChatToExcel);
+
+    // Fungsi untuk memuat backup chat dari file Excel
+    function loadBackupFromExcel(fileContent) {
+        const workbook = XLSX.read(fileContent, { type: 'binary' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 });
+        
+        // Hapus header dan ambil data (User, Message, Timestamp)
+        const data = worksheet.slice(1);
+
+        // Bersihkan chatLog dan tambahkan data baru
+        chatLog = data.map(row => ({
+            user: row[0],
+            message: row[1],
+            timestamp: row[2]
+        }));
+
+        renderChatLog(); // Render kembali chat dari backup
+        saveChatLogToLocalStorage(); // Simpan chatLog ke localStorage
+        alert("Backup dari Excel berhasil dipulihkan.");
+    }
+
+    // Event listener untuk upload backup file Excel
+    uploadBackupButton.addEventListener("click", function() {
+        const file = fileInput.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const fileContent = event.target.result;
+                loadBackupFromExcel(fileContent); // Panggil fungsi loadBackupFromExcel
+            };
+            reader.readAsBinaryString(file); // Membaca file sebagai binary string
+        } else {
+            alert("Silakan pilih file backup Excel terlebih dahulu.");
+        }
+    });
+
+    // Opsional: Kirim pesan dengan menekan Enter
+    newMessageInput.addEventListener("keypress", function (e) {
+        if (e.key === "Enter") {
+            sendMessage();
+        }
+    });
+
+    // Opsional: Cari pesan dengan menekan Enter
+    searchMessageInput.addEventListener("keypress", function (e) {
+        if (e.key === "Enter") {
+            searchMessage();
+        }
+    });
+
+    // Muat chatLog dari localStorage saat halaman pertama kali dimuat
+    window.addEventListener("load", loadChatLogFromLocalStorage);
+</script>
+
+</body>
+</html>
